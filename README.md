@@ -21,6 +21,24 @@ supporting.
 Creating a function will provide an http link that is the base URL for the endpoints
 described below.
 
+## Authentication
+
+The appdata cloud functions do not support Google oauth.
+Authentication and authorization is done using JSON
+Web Tokens (JWT).  To create a JWT, install the python
+JWT tool:
+
+    % pip install PyJWT
+
+To create a token:
+
+    % pyjwt --key=MYSECRET encode email=EMAILADDR level=admin|readwrite|readonly
+
+This will generate an ID which should be passed in the Authorization request header for each call.
+
+Only admins can write to the /data and /users endpoints.
+
+
 ## Usage
 
 Each given application that has a set of authorized user should have a separate cloud
@@ -43,21 +61,10 @@ Access User Data
 * GET /user/:key (>=readonly): retrieve data for authenticated user at the specified key
 * POST/PUT /user/:key (>=readwrite): write user data at key with supplied JSON
 (POST will do a transacational append, PUT will overwrite with supplied data)
-* DELETE /data/:key (>=readwrite): remove data from supplied key 
+* DELETE /data/:key (>=readwrite): remove data from supplied key
 
-## Authentication
+To call these endpoints, data should be posted as JSON and authorization added to the header.  For
+example, to add a user "foo@bar" with "readonly" permission, do the following:
 
-The appdata cloud functions do not support Google oauth.
-Authentication and authorization is done using JSON
-Web Tokens (JWT).  To create a JWT, install the python
-JWT tool:
+    % curl -X POST -H "Content-Type: application/json" -H "Authorization: Bearer <tokenid>" https://<GOOGLEFUNCTION>/users -d '{"foo@bar": "admin"}'
 
-    pip install PyJWT
-
-To create a token:
-
-pyjwt --key=MYSECRET encode email=EMAILADDR level=admin|readwrite|readonly
-
-This will generate an ID which should be passed in the Authorization request header for each call.
-
-Only admins can write to the /data and /users endpoints.
