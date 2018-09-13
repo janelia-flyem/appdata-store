@@ -3,7 +3,7 @@ from google.cloud.datastore import Client, Entity
 import jwt
 import os
 import json
-from flask import abort
+from flask import abort, make_response
 
 # Environment variables 
 
@@ -37,7 +37,7 @@ def getData(client, key, propname):
     try:
         task = client.get(key)
         if not task or propname not in task:
-            return ""
+            return json.dumps({})
         return json.dumps(task[propname])
     except:
         return abort(400)
@@ -162,7 +162,8 @@ def handlerUsers(token, userdata, method):
                     for user in userdata:
                         del task[user]
                 client.put(task)
-        except:
+        except Exception as e:
+            print(e)
             return abort(400)
     else:
         return abort(400)
@@ -178,21 +179,27 @@ def appdata(request):
         Response object using
         `make_response <http://flask.pocoo.org/docs/0.12/api/#flask.Flask.make_response>`.
     """
-   
+    # handle preflight request
+    if request.method == "OPTIONS":
+        resp = make_response("")
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Methods'] = 'POST, GET, DELETE, OPTIONS'
+        resp.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
+        return resp
     # extract jwt token
     auth = request.headers.get('authorization')
     if auth is None or auth == "":
-        return abort(404)
+        return abort(401)
     authlist = auth.split(' ')
     if len(authlist) != 2:
-        return abort(404) # Bearer must be specified
+        return abort(401) # Bearer must be specified
     auth = authlist[1]
 
     tokeninfo = None
     try:
         tokeninfo = jwt.decode(str.encode(auth), SECRET, algorithms=['HS256'])
     except:
-        return abort(404) # error in decoding JWT
+        return abort(401) # error in decoding JWT
 
     user = tokeninfo["email"]
     level = tokeninfo["level"]
@@ -204,22 +211,26 @@ def appdata(request):
         abort(400)
 
     # if data is posted it should be in JSON format
-    jsondata = request.get_json()
+    jsondata = request.get_json(force=True, silent=True)
 
     # GET /user/:key -- return value (need read permission)
     # POST/PUT/DELETE /user/:key JSON value -- post value (need write permission)
     if urlparts[0] == "user":
-        return handlerUserData(urlparts[1:], tokeninfo, jsondata, request.method)
+        resp = handlerUserData(urlparts[1:], tokeninfo, jsondata, request.method)
     # GET /users -- return all users and auth (admin)
     # POST /users -- add user and auth
     elif urlparts[0] == "users":
-        return handlerUsers(tokeninfo, jsondata, request.method)
+        resp = handlerUsers(tokeninfo, jsondata, request.method)
     # GET /data/:key -- user read permission
     # POST/PUT/DELETE /data/:key -- admin
     elif urlparts[0] == "data":
-        return handlerAppData(urlparts[1:], tokeninfo, jsondata, request.method)
+        resp = handlerAppData(urlparts[1:], tokeninfo, jsondata, request.method)
     else:
         abort(400)
 
-
+    resp = make_response(resp)
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    resp.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
+    resp.headers['Access-Control-Allow-Methods'] = 'POST, GET, DELETE, OPTIONS'
+    return resp
 
