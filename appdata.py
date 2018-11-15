@@ -4,12 +4,15 @@ import jwt
 import os
 import json
 from flask import abort, make_response
+import requests
 
 # Environment variables 
 
 # private password for decoding JWT ("email", "level": "read"|"readwrite"|"admin")
 # currently JWT should be created outside of this program
 SECRET = os.environ["JWT_SECRET"]
+
+GITTOKEN = os.environ["GIT_TOKEN"]
 
 # name of application authorization group -- must be a name of kind
 GROUPNAME = os.environ["GROUPNAME"]
@@ -72,6 +75,24 @@ def setData(client, key, propname, data, method):
         return abort(400)
     return ""
 
+def handlerGitInfo(urlarr, data):
+    if len(urlarr) > 0:
+        return abort(400)
+
+    #parse org info
+    org = data["organization"]
+    
+    # use saved token
+    GITHUB_API = "https://api.github.com/graphql"
+
+    request = {"query" : '{ organization(login: "' + org + '") { repositories(first: 50, orderBy: {field: NAME, direction:ASC}) { edges { node { name issues(first:50, states:[OPEN]) { edges { node { title url number body }}}}}}}}'}
+    headers = {'Authorization': 'token %s' % GITTOKEN}
+    r = requests.post(url=GITHUB_API, json=request, headers=headers)
+
+    if r.status_code != 200:
+        return abort(r.status_code)
+    jsondata = r.json()
+    return json.dumps(jsondata) 
 
 def handlerUserData(urlarr, token, data, method):
     if len(urlarr) == 0:
@@ -225,6 +246,8 @@ def appdata(request):
     # POST/PUT/DELETE /data/:key -- admin
     elif urlparts[0] == "data":
         resp = handlerAppData(urlparts[1:], tokeninfo, jsondata, request.method)
+    elif urlparts[0] == "gitinfo":
+        resp = handlerGitInfo(urlparts[1:], jsondata)
     else:
         abort(400)
 
