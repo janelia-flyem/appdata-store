@@ -85,7 +85,7 @@ def handlerGitInfo(urlarr, data):
     # use saved token
     GITHUB_API = "https://api.github.com/graphql"
 
-    request = {"query" : '{ organization(login: "' + org + '") { repositories(first: 50, orderBy: {field: NAME, direction:ASC}) { edges { node { name issues(first:50, states:[OPEN]) { edges { node { title url number body }}}}}}}}'}
+    request = {"query" : '{ organization(login: "' + org + '") { repositories(first: 50, orderBy: {field: NAME, direction:ASC}) { edges { node { name issues(first:50, states:[OPEN], labels: [user]) { edges { node { title url number body labels(first: 20) {edges {label: node {name}}}}}}}}}}}'}
     headers = {'Authorization': 'token %s' % GITTOKEN}
     r = requests.post(url=GITHUB_API, json=request, headers=headers)
 
