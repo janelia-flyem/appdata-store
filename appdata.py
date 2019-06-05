@@ -6,7 +6,7 @@ import json
 from flask import abort, make_response
 import requests
 
-# Environment variables 
+# Environment variables
 
 # private password for decoding JWT ("email", "level": "read"|"readwrite"|"admin")
 # currently JWT should be created outside of this program
@@ -53,7 +53,7 @@ def setData(client, key, propname, data, method):
             if not task:
                 task = Entity(key)
                 task.update({
-                    propname: data 
+                    propname: data
                 })
             else:
                 # overwrite data for put
@@ -81,7 +81,7 @@ def handlerGitInfo(urlarr, data):
 
     #parse org info
     org = data["organization"]
-    
+
     # use saved token
     GITHUB_API = "https://api.github.com/graphql"
 
@@ -92,7 +92,7 @@ def handlerGitInfo(urlarr, data):
     if r.status_code != 200:
         return abort(r.status_code)
     jsondata = r.json()
-    return json.dumps(jsondata) 
+    return json.dumps(jsondata)
 
 def handlerUserData(urlarr, token, data, method):
     if len(urlarr) == 0:
@@ -110,13 +110,13 @@ def handlerUserData(urlarr, token, data, method):
     if method == "GET":
         if not isAuthorized(token, "readonly"):
             return abort(404)
-   
+
         return getData(client, key, propname)
-    
+
     if not isAuthorized(token, "readwrite"):
         return abort(404)
 
-    return setData(client, key, propname, data, method)  
+    return setData(client, key, propname, data, method)
 
 def handlerAppData(urlarr, token, data, method):
     if len(urlarr) == 0:
@@ -134,19 +134,19 @@ def handlerAppData(urlarr, token, data, method):
     if method == "GET":
         if not isAuthorized(token, "readonly"):
             return abort(404)
-   
+
         return getData(client, key, propname)
-    
+
     if not isAuthorized(token, "admin"):
         return abort(404)
 
-    return setData(client, key, propname, data, method)  
+    return setData(client, key, propname, data, method)
 
 
 def handlerUsers(token, userdata, method):
     if not isAuthorized(token, "admin"):
         return abort(404)
-    
+
     # Instantiates a client
     client = Client()
     # The kind for the new entity
@@ -190,7 +190,7 @@ def handlerUsers(token, userdata, method):
         return abort(400)
 
     return ""
-   
+
 def appdata(request):
     """Responds to any HTTP request.
     Args:
@@ -256,4 +256,3 @@ def appdata(request):
     resp.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
     resp.headers['Access-Control-Allow-Methods'] = 'POST, GET, DELETE, OPTIONS'
     return resp
-
