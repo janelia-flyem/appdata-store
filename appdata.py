@@ -1,8 +1,9 @@
+import os
+import re
+import json
 # Imports the Google Cloud client library
 from google.cloud.datastore import Client, Entity
 import jwt
-import os
-import json
 from flask import abort, make_response
 import requests
 
@@ -62,7 +63,7 @@ def setData(client, key, propname, data, method):
                 # append data for post
                 elif method == "POST":
                     if propname in task:
-                        if type(task[propname]) == list:
+                        if isinstance(task[propname], list):
                             task[propname].append(data)
                         else:
                             task[propname] = [task[propname], data]
@@ -94,9 +95,89 @@ def handlerGitInfo(urlarr, data):
     jsondata = r.json()
     return json.dumps(jsondata)
 
+
+def getRest(client, key, owner):
+    item = client.get(key)
+    if not item:
+        return abort(404)
+    return json.dumps(item)
+
+def getRestQuery(client, ancestor, propname, owner):
+    # create a search query that filters results based on the logged in
+    # users email address and the key kind.
+    clientquery = client.query(kind=propname, ancestor=ancestor)
+    res = clientquery.fetch()
+    if res:
+        items = [{'id': item.id, 'value': item} for item in res]
+        return json.dumps(items)
+    return abort(404)
+
+def handleRest(urlarr, token, data, method):
+    print('handled by REST')
+
+    # unpack property id and name
+    propname, *prop_id = urlarr
+    prop_id = int(prop_id[0]) if prop_id else None
+
+    # we don't allow puts or deletes on the whole collection
+    if not prop_id and re.match(r"^DELETE|PUT$", method):
+        return abort(405)
+
+    # don't allow posts to an individual item
+    if prop_id and method == "POST":
+        return abort(409)
+
+    # set up the client
+    kind = GROUPNAME
+    client = Client()
+
+    # create the key
+    if prop_id:
+        # create a full key
+        key = client.key(kind, token["email"], propname, prop_id)
+    else:
+        # create a partial key
+        key = client.key(kind, token["email"], propname)
+
+
+    # if GET return the data
+    if method == "GET":
+        if key.is_partial:
+            ancestor = client.key(kind, token['email'])
+            return getRestQuery(client, ancestor, propname, token['email'])
+        return getRest(client, key, token['email'])
+
+    # if POST create new entry or PUT overwrite
+    if re.match(r"^POST|PUT$", method):
+        entity = Entity(key=key)
+        entity.update(data)
+        client.put(entity)
+        # return 200 OK with entity id in the payload
+        return json.dumps({})
+
+    # if DELETE remove entry
+    if method == "DELETE":
+        client.delete(key)
+        return json.dumps({})
+
+    return abort(400)
+
+
 def handlerUserData(urlarr, token, data, method):
     if len(urlarr) == 0:
         return abort(400)
+
+    # check that the token allows read if it is a get request
+    if method == "GET" and not isAuthorized(token, "readonly"):
+        return abort(404)
+    # check that the token allows readwrite for all other methods
+    if not isAuthorized(token, "readwrite"):
+        return abort(404)
+
+    # short circuit out these two urls as they don't behave the same way
+    # as the defaults.
+    if urlarr[0] == "searches" or urlarr[0] == "favorites":
+        return handleRest(urlarr, token, data, method)
 
     # Instantiates a client
     client = Client()
@@ -108,14 +189,9 @@ def handlerUserData(urlarr, token, data, method):
     key = client.key(kind, token["email"])
 
     if method == "GET":
-        if not isAuthorized(token, "readonly"):
-            return abort(404)
-
         return getData(client, key, propname)
 
-    if not isAuthorized(token, "readwrite"):
-        return abort(404)
-
+    # all other methods are set methods
     return setData(client, key, propname, data, method)
 
 def handlerAppData(urlarr, token, data, method):
@@ -222,9 +298,6 @@ def appdata(request):
     except:
         return abort(401) # error in decoding JWT
 
-    user = tokeninfo["email"]
-    level = tokeninfo["level"]
-
     pathinfo = request.path.strip("/")
     urlparts = pathinfo.split('/')
 
@@ -235,7 +308,8 @@ def appdata(request):
     jsondata = request.get_json(force=True, silent=True)
 
     # GET /user/:key -- return value (need read permission)
-    # POST/PUT/DELETE /user/:key JSON value -- post value (need write permission)
+    # PUT/DELETE /user/:key JSON value -- put value (need write permission)
+    # POST /user JSON value -- post value (need write permission)
     if urlparts[0] == "user":
         resp = handlerUserData(urlparts[1:], tokeninfo, jsondata, request.method)
     # GET /users -- return all users and auth (admin)
