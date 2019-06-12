@@ -96,13 +96,15 @@ def handlerGitInfo(urlarr, data):
     return json.dumps(jsondata)
 
 
-def getRest(client, key, owner):
+def get_rest(client, key):
+    """ fetch the value of 'key' from the data store and return it"""
     item = client.get(key)
     if not item:
         return abort(404)
     return json.dumps(item)
 
-def getRestQuery(client, ancestor, propname, owner):
+def get_rest_query(client, ancestor, propname):
+    """ search the data store for decendants of ancestor of kind specified in 'propname'"""
     # create a search query that filters results based on the logged in
     # users email address and the key kind.
     clientquery = client.query(kind=propname, ancestor=ancestor)
@@ -144,8 +146,8 @@ def handleRest(urlarr, token, data, method):
     if method == "GET":
         if key.is_partial:
             ancestor = client.key(kind, token['email'])
-            return getRestQuery(client, ancestor, propname, token['email'])
-        return getRest(client, key, token['email'])
+            return get_rest_query(client, ancestor, propname)
+        return get_rest(client, key)
 
     # if POST create new entry or PUT overwrite
     if re.match(r"^POST|PUT$", method):
